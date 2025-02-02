@@ -1,35 +1,35 @@
-import type { ReactElement } from 'react'
-import { useAtom, useAtomValue } from 'jotai'
+import type { ReactElement } from "react";
+import { useAtom, useAtomValue } from "jotai";
 
-import { useCallback } from 'react'
-import { boardAtom, playerAtom } from '~/atoms/game'
-import { overlayAtom } from '~/atoms/ui'
-import { useDispatch } from '../../hooks'
-import { reset, userPlaceChess } from '../../store'
-import { Board as DumbBoard } from './Board'
+import { useCallback } from "react";
+import { boardAtom, playerAtom } from "~/atoms/game";
+import { overlayAtom } from "~/atoms/ui";
+import { useDispatch } from "../../hooks";
+import { reset, userPlaceChess } from "../../store";
+import { Board as DumbBoard } from "./Board";
 
 interface Props {
-  hint: boolean
+  hint: boolean;
 }
 
 export function Board({ hint }: Props): ReactElement {
-  const board = useAtomValue(boardAtom)
-  const player = useAtomValue(playerAtom)
-  const started = !!player
-  const [overlay, setOverlay] = useAtom(overlayAtom)
-  const dispatch = useDispatch()
+  const board = useAtomValue(boardAtom);
+  const player = useAtomValue(playerAtom);
+  const started = !!player;
+  const [overlay, setOverlay] = useAtom(overlayAtom);
+  const dispatch = useDispatch();
   const placeChess = useCallback(
     (row: number, col: number): void => {
       if (overlay) {
-        setOverlay('')
+        setOverlay("");
       }
       if (!started) {
-        return
+        return;
       }
-      dispatch(userPlaceChess(row, col))
+      dispatch(userPlaceChess(row, col));
     },
-    [dispatch, overlay, started],
-  )
+    [dispatch, overlay, started]
+  );
 
   return (
     <DumbBoard
@@ -40,5 +40,5 @@ export function Board({ hint }: Props): ReactElement {
       reset={(player: string) => dispatch(reset(player))}
       placeChess={placeChess}
     />
-  )
+  );
 }
