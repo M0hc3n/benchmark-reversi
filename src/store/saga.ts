@@ -23,6 +23,7 @@ import {
 } from "~/atoms/game";
 import { store } from "~/atoms/store";
 import { historyAtom, overlayAtom } from "~/atoms/ui";
+import { togetherAPICall } from "~/lib/ai/together";
 import { DEFAULT_USER } from "~/lib/consts";
 // import { together } from "~/lib/together.ai";
 import {
@@ -164,53 +165,38 @@ function* placeCandidate() {
   store.set(candidateAtom, count);
 }
 
+function getBoardState(board: Board) {
+  return board.map((row) => row.join(" ")).join("\n");
+}
+
 function* getCoordsUsingLLM() {
-  console.log([
-    {
-      role: "user",
-      content:
-        'we are going to play orthello. Assume that we are playing at a board were you represent B and I represent W. Suppose that the board is a matrix of 8*8 (indexes are 0-7). Now suppose the board is at its initial configuration, you get to make the first move. Return only x and y in this format "x y" with no extra additions or comments',
-    },
-    ...store.get(messagesAtom),
-  ]);
+  const board = store.get(boardAtom);
+  const boardState = getBoardState(board);
+  const messages = store.get(messagesAtom);
+
+  const systemMessage = {
+    role: "system",
+    content:
+      'we are going to play orthello. Assume that we are playing at a board were you represent B and I represent W. Suppose that the board is a matrix of 8*8 (indexes are 0-7). Now suppose the board is at its initial configuration, you get to make the first move. Return only x and y in this format "x y" with no extra additions or comments',
+  };
+
+  const currentMove = {
+    role: "user",
+    content: `Current board state:\n${boardState}\nMake your move (respond only with x y coordinates):`,
+  };
+
+  const allMessages = [systemMessage, ...messages];
+
+  console.log(allMessages);
 
   try {
-    const response = yield call(
-      fetch,
-      "https://api.together.xyz/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer <token>`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "deepseek-ai/DeepSeek-V3",
-          messages: [
-            {
-              role: "user",
-              content:
-                'we are going to play orthello. Assume that we are playing at a board were you represent B and I represent W. Suppose that the board is a matrix of 8*8 (indexes are 0-7). Now suppose the board is at its initial configuration, you get to make the first move. Return only x and y in this format "x y" with no extra additions or comments',
-            },
-            ...store.get(messagesAtom),
-          ],
-          max_tokens: null,
-          temperature: 0.7,
-          top_p: 0.7,
-          top_k: 50,
-          repetition_penalty: 1,
-          stop: ["<｜end▁of▁sentence｜>"],
-          stream: false,
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.statusText}`);
-    }
-
-    const data = yield call([response, "json"]);
-
+    const data = yield call(togetherAPICall, allMessages);
+    // Store both the user's move and AI's response
+    store.set(messagesAtom, (messages) => [
+      ...messages,
+      // currentMove,
+      data.choices[0].message,
+    ]);
     return data;
   } catch (error) {
     console.error("Error getting LLM response:", error);
@@ -224,21 +210,18 @@ function* aiJudgeScore() {
   const version = store.get(aiVersionAtom);
 
   try {
-    // const aiResponse = yield call(getCoordsUsingLLM);
-    // console.log("AI Response:", aiResponse);
+    const aiResponse = yield call(getCoordsUsingLLM);
+    console.log("AI Response:", aiResponse);
 
-    // store.set(messagesAtom, (messages) => {
-    //   messages.push(aiResponse.choices[0].message);
-    // });
+    const [row, col] = aiResponse.choices[0].message.content.split(" ");
 
-    // const [row, col] = aiResponse.choices[0].message.content.split(" ");
+    // just skip this
+    // const ai = getOpposite(player);
+    // const scores = computeScores(board, version, player, ai);
+    // const { row, col } = getBestPoint(scores);
 
-    // Continue with existing logic
-    const ai = getOpposite(player);
-    const scores = computeScores(board, version, player, ai);
-    const { row, col } = getBestPoint(scores);
+    console.log(row, col);
 
-    yield delay(300);
     store.set(logAtom, (logs) => {
       logs.push({
         player,
@@ -247,6 +230,7 @@ function* aiJudgeScore() {
     });
     const nextBoard = placeAndFlip({ board, row, col, player });
     store.set(boardAtom, nextBoard as Board);
+    yield delay(3000);
   } catch (error) {
     console.error("Error in AI judge:", error);
   }
@@ -298,6 +282,14 @@ function* userPlaceChess({ payload: { col, row } }: PayloadAction<Coords>) {
       pos: `(${row}, ${col})`,
     });
   });
+
+  store.set(messagesAtom, (messages) => [
+    ...messages,
+    {
+      role: "user",
+      content: `Move played: ${row} ${col}`,
+    },
+  ]);
 
   const nextBoard = placeAndFlip({ board, row, col, player });
   store.set(boardAtom, nextBoard as Board);
